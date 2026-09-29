@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Attendance Monitor</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 2rem; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    h1 { margin-bottom: .25rem; }
+    .meta { color: #94a3b8; margin-bottom: 1.5rem; }
+    video { width: 100%; border-radius: 12px; background: #000; }
+    .controls { display: flex; gap: .75rem; margin: 1rem 0; flex-wrap: wrap; align-items: center; }
+    button, a.link { border: none; border-radius: 8px; padding: .65rem 1rem; cursor: pointer; font-size: .95rem; }
+    .primary { background: #3b82f6; color: white; }
+    .danger { background: #dc2626; color: white; }
+    a.link { background: #475569; color: white; text-decoration: none; display: inline-block; }
+    .status { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1rem; margin-top: 1rem; min-height: 120px; }
+    .result { font-size: 1.25rem; margin-bottom: .5rem; }
+    .detail { color: #94a3b8; font-size: .9rem; }
+    .matched { color: #4ade80; }
+    .unknown { color: #fbbf24; }
+    label { display: flex; align-items: center; gap: .4rem; color: #cbd5e1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="link" href="/">← Back</a>
+    <h1>Live Attendance Monitor</h1>
+    <p class="meta">Recognizes faces and marks check-in / check-out automatically.</p>
+
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" hidden></canvas>
+
+    <div class="controls">
+      <button class="primary" id="startBtn">Start Monitoring</button>
+      <button class="danger" id="stopBtn" disabled>Stop</button>
+      <label><input type="checkbox" id="autoMark" checked> Mark attendance</label>
+    </div>
+
+    <div class="status">
+      <div class="result" id="result">Waiting to start...</div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const resultEl = document.getElementById("result");
+    const detailEl = document.getElementById("detail");
+    let intervalId = null;
+
+    async function startCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      video.srcObject = stream;
+    }
+
+    function snapBase64() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      return canvas.toDataURL("image/jpeg", 0.85);
+    }
+
+    async function scan() {
+      const image = snapBase64();
+      const res = await fetch("/api/recognition/identify/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image,
+          mark_attendance: document.getElementById("autoMark").checked,
+          source: "webcam",
+        }),
+      });
+      const data = await res.json();
+      const now = new Date().toLocaleTimeString();
+
+      if (data.matched) {
+        resultEl.className = "result matched";
+        resultEl.textContent = `${data.employee_id} recognized (${(data.confidence * 100).toFixed(1)}%)`;
+        if (data.attendance) {
+          detailEl.textContent = `[${now}] ${data.attendance.message} — Status: ${data.attendance.status}`;
+        } else {
+          detailEl.textContent = `[${now}] Face recognized`;
+        }
+      } else {
+        resultEl.className = "result unknown";
+        resultEl.textContent = data.message || "Unknown face";
+        detailEl.textContent = `[${now}] Confidence: ${((data.confidence || 0) * 100).toFixed(1)}%`;
+      }
+    }
+
+    document.getElementById("startBtn").onclick = () => {
+      if (intervalId) return;
+      intervalId = setInterval(scan, 3000);
+      document.getElementById("startBtn").disabled = true;
+      document.getElementById("stopBtn").disabled = false;
+      resultEl.textContent = "Monitoring...";
+    };
+
+    document.getElementById("stopBtn").onclick = () => {
+      clearInterval(intervalId);
+      intervalId = null;
+      document.getElementById("startBtn").disabled = false;
+      document.getElementById("stopBtn").disabled = true;
+      resultEl.textContent = "Monitoring stopped";
+      detailEl.textContent = "";
+    };
+
+    startCamera().catch(() => {
+      resultEl.textContent = "Camera access denied";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+Django>=6.0
+djangorestframework>=3.17
+djangorestframework-simplejwt>=5.5
+django-cors-headers>=4.9
+psycopg2-binary>=2.9
+Pillow>=12.0
+opencv-python>=4.8
+numpy>=2.0
+insightface>=0.7
+stripe>=11.0
+# Windows GPU via DirectML (GTX/RTX/AMD/Intel). Use onnxruntime-gpu + CUDA on Linux/NVIDIA with toolkit.
+onnxruntime-directml>=1.24
+openpyxl>=3.1
+reportlab>=4.2
